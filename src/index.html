@@ -1,17 +1,96 @@
-<!DOCTYPE html>
-<html lang="en">
-
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
-  <title>Vanilla JavaScript App</title>
+  <meta charset="utf-8" />
+  <title>Teams Context Debug</title>
+  <script src="https://res.cdn.office.net/teams-js/2.53.1/js/MicrosoftTeams.min.js"></script>
+  <style>
+    body {
+      font-family: Consolas, monospace;
+      padding: 16px;
+      color: #222;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f4f4f4;
+      border: 1px solid #ccc;
+      padding: 12px;
+    }
+    h2, h3 {
+      font-family: Arial, sans-serif;
+    }
+  </style>
 </head>
-
 <body>
-  <main>
-    <h1>Vanilla JavaScript App</h1>
-  </main>
-</body>
+  <h2>Teams Context Debug</h2>
 
+  <h3>Location</h3>
+  <pre id="location"></pre>
+
+  <h3>URL Parameters</h3>
+  <pre id="query"></pre>
+
+  <h3>Teams SDK Context</h3>
+  <pre id="context">Loading...</pre>
+
+  <h3>SSO Token Test</h3>
+  <pre id="token">Loading...</pre>
+
+  <script>
+    function write(id, value) {
+      document.getElementById(id).textContent =
+        typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    }
+
+    function decodeJwt(token) {
+      const payload = token.split(".")[1];
+      const normalised = payload.replace(/-/g, "+").replace(/_/g, "/");
+      return JSON.parse(atob(normalised));
+    }
+
+    async function run() {
+      write("location", {
+        href: window.location.href,
+        origin: window.location.origin,
+        referrer: document.referrer,
+        userAgent: navigator.userAgent
+      });
+
+      write("query", Object.fromEntries(new URLSearchParams(window.location.search)));
+
+      try {
+        await microsoftTeams.app.initialize();
+
+        const context = await microsoftTeams.app.getContext();
+        write("context", context);
+
+        try {
+          const token = await microsoftTeams.authentication.getAuthToken();
+          write("token", {
+            result: "SUCCESS",
+            tokenLength: token.length,
+            decodedPayload: decodeJwt(token)
+          });
+        } catch (err) {
+          write("token", {
+            result: "FAILED",
+            error: String(err),
+            note: "Expected unless Teams SSO / Entra app registration / webApplicationInfo are correctly configured."
+          });
+        }
+      } catch (err) {
+        write("context", {
+          result: "FAILED",
+          error: String(err),
+          note: "Likely not running inside Teams, or Teams has blocked the tab domain."
+        });
+
+        write("token", "Skipped because Teams SDK initialization failed.");
+      }
+    }
+
+    run();
+  </script>
+</body>
 </html>
